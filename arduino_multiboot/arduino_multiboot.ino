@@ -10,15 +10,14 @@
 
 void setup() {
   // put your setup code here, to run once:
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
-  Serial.begin(57600);
+  Serial.begin(115200);
   Serial.setTimeout(-1);
   // SPI Settings
   SPI.begin();
   SPI.beginTransaction(SPISettings(256000, MSBFIRST, SPI_MODE3));
   Serial.write(READY);
   gba_transmit_rom();
+  SPI.endTransaction();
   //detect_mb_type();
   //detect_gba_test();
 }
@@ -171,7 +170,7 @@ void gba_transmit_rom() {
   spi_wait32(0x000000065, 0x00750065);
   (void*)spi_rw32(0x00000066);
   uint32_t crc_gba = spi_rw32(crc_c & 0xFFFF) >> 16;
-  delayMicroseconds(100);
+  delayMicroseconds(2000);
   if(crc_gba == crc_c) {
     Serial.write(TRANSMISSION_SUCCESS);
   }
