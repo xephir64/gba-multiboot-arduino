@@ -1,6 +1,3 @@
-/**
- * Original implementation : https://github.com/merryhime/gba-multiboot/blob/master/sender/sender.c 
- */
 #include <SPI.h>
 
 #define READY 0x01
@@ -11,7 +8,7 @@
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(115200);
-  Serial.setTimeout(-1);
+  Serial.setTimeout(20);
   // SPI Settings
   SPI.begin();
   SPI.beginTransaction(SPISettings(256000, MSBFIRST, SPI_MODE3));
@@ -65,10 +62,12 @@ uint8_t serial_read8() {
   return read;
 }
 
+/**
+ * Original implementation : https://github.com/merryhime/gba-multiboot/blob/master/sender/sender.c 
+ */
 void gba_transmit_rom() {
   uint32_t token, crc_a, crc_b, crc_c, seed;
   uint32_t chunk_size = 0;
-  uint32_t fsend = 0xC0;
   uint32_t length = 0;
   uint8_t header[0xC0];
 
@@ -125,16 +124,15 @@ void gba_transmit_rom() {
   Serial.write(REQUEST_FILE_CHUNK);
 
   uint32_t chunk, tmp;
-  while(fsend < fsize) {
+  for(uint32_t fsend = 0xC0; fsend < fsize; fsend+=4) {
     // If we have already proceeded a chunk, then we request the next part
     if(chunk_size == 32){
-      //Serial.println("Request Chunk");
       Serial.write(REQUEST_FILE_CHUNK);
       chunk_size = 0;
     }
 
     // Receive 4 bytes of data
-    chunk = serial_read32();
+    uint32_t chunk = serial_read32();
     chunk_size += 4;
 
     // CRC
@@ -154,7 +152,6 @@ void gba_transmit_rom() {
     if(check != (fsend & 0xFFFF)) {
       Serial.write(TRANSMISSION_ERROR);
     }
-    fsend += 4;
   }
   uint32_t final = 0xFFFF0000 | (crc_b << 8) | crc_a;
   for(int i = 0; i < 32; i++) {
