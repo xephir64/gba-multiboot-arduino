@@ -1,9 +1,11 @@
 #include <SPI.h>
 
 #define READY 0x01
-#define REQUEST_FILE_CHUNK 0x02
-#define TRANSMISSION_ERROR 0x03
-#define TRANSMISSION_SUCCESS 0x04
+#define REQUEST_SIZE_HEADER 0x02
+#define REQUEST_FILE_CHUNK 0x03
+#define TRANSMISSION_ERROR 0x04
+#define TRANSMISSION_SUCCESS 0x05
+#define ACK 0x06
 
 void setup() {
   // put your setup code here, to run once:
@@ -12,11 +14,10 @@ void setup() {
   // SPI Settings
   SPI.begin();
   SPI.beginTransaction(SPISettings(256000, MSBFIRST, SPI_MODE3));
-  Serial.write(READY);
   gba_transmit_rom();
-  SPI.endTransaction();
   //detect_mb_type();
   //detect_gba_test();
+  SPI.endTransaction();
 }
 
 // SPI Functions:
@@ -40,11 +41,12 @@ uint32_t spi_rw32(uint32_t data) {
   return (buf_read[0] << 24) | (buf_read[1] << 16) | (buf_read[2] << 8) | buf_read[3];
 }
 
-void spi_wait32(uint32_t data, uint32_t expected) {
+uint32_t spi_wait32(uint32_t data, uint32_t expected) {
   uint32_t buf;
   do {
     buf = spi_rw32(data);
   } while(buf != expected);
+  return buf;
 }
 
 // Serial Functions:
@@ -71,6 +73,16 @@ void gba_transmit_rom() {
   uint32_t length = 0;
   uint8_t header[0xC0];
 
+  Serial.write(READY);
+  for(;;) {
+    uint8_t r = serial_read8();
+    if(r == ACK){
+      break;
+    }
+  }
+  delayMicroseconds(1000);
+  Serial.write(REQUEST_SIZE_HEADER);
+
   // Receive ROM length
   length = serial_read32();
 
@@ -90,7 +102,7 @@ void gba_transmit_rom() {
   //Sendig header
   Serial.println("Sending Header");
   (void*)spi_rw32(0x00006102);
-  uint16_t *header16 = (uint16_t*)header;
+  uint16_t* header16 = (uint16_t*)header;
   for(int i = 0; i < 0xC0; i+=2) {
     (void*)spi_rw32(header16[i / 2]);
   }
@@ -167,12 +179,11 @@ void gba_transmit_rom() {
   spi_wait32(0x000000065, 0x00750065);
   (void*)spi_rw32(0x00000066);
   uint32_t crc_gba = spi_rw32(crc_c & 0xFFFF) >> 16;
-  delayMicroseconds(2000);
+  delayMicroseconds(3000);
   if(crc_gba == crc_c) {
     Serial.write(TRANSMISSION_SUCCESS);
   }
 }
-
 
 // Function to test GBA recognition
 void detect_gba_test() {

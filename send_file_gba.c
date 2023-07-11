@@ -5,15 +5,18 @@
 #include "serial.h"
 
 #define READY 0x01
-#define REQUEST_FILE_CHUNK 0x02
-#define TRANSMISSION_ERROR 0x03
-#define TRANSMISSION_SUCCESS 0x04
+#define REQUEST_SIZE_HEADER 0x02
+#define REQUEST_FILE_CHUNK 0x03
+#define TRANSMISSION_ERROR 0x04
+#define TRANSMISSION_SUCCESS 0x05
+#define ACK 0x06
 
 // Function to send the GBA/MB file
 int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
   uint8_t header[0xC0]; // ROM Header of size 0xC0
   uint8_t gba_buf[32]; // Chunk of 32 bytes of data
   uint32_t bytes_read_total = 0xC0; // Total bytes read
+  uint8_t ack = 0x06;
   for(;;) {
     unsigned char buffer[512];
     ssize_t bytesRead = read(arduino, buffer, sizeof(buffer));
@@ -21,12 +24,15 @@ int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
       //printf("0x%02x\n", buffer[0]);
       switch(buffer[0]) {
         case READY:
+          serial_write(arduino, &ack, sizeof(uint8_t));
+          break;
+        case REQUEST_SIZE_HEADER:
           printf("Sending ROM Size\n");
           serial_write32(arduino, &length, sizeof(length));
           printf("Sending Header...\n");
           fread(header, sizeof(uint8_t), 0xC0, gba_file);
           for(int i = 0; i < sizeof(header); i++) {
-              printf("Sending[%d]: %hhX\n", i, header[i]);
+              // printf("Sending[%d]: %hhX\n", i, header[i]);
               serial_write(arduino, &header[i], sizeof(uint8_t));
           }
           break;
@@ -35,7 +41,7 @@ int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
             uint32_t bytes_read = fread(gba_buf, 1, sizeof(gba_buf), gba_file);
             serial_write(arduino, gba_buf, bytes_read);
             bytes_read_total += bytes_read;
-            printf("Wrote: %d / %d\n", bytes_read_total, length);
+            printf("%d / %d\n", bytes_read_total, length);
             usleep(1000);
           }
           buffer[0] = '\0';
@@ -45,7 +51,8 @@ int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
           return -1;
         case TRANSMISSION_SUCCESS:
           printf("Checksum Ok...\n");
-          return 0;
+          //return 0;
+          break;
       }
     }
     else {
