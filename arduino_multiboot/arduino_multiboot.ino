@@ -15,7 +15,6 @@ void setup() {
   SPI.begin();
   SPI.beginTransaction(SPISettings(256000, MSBFIRST, SPI_MODE3));
   gba_transmit_rom();
-  //detect_mb_type();
   //detect_gba_test();
   SPI.endTransaction();
 }
@@ -80,7 +79,7 @@ void gba_transmit_rom() {
       break;
     }
   }
-  delayMicroseconds(1000);
+  //delayMicroseconds(1000);
   Serial.write(REQUEST_SIZE_HEADER);
 
   // Receive ROM length
@@ -101,24 +100,24 @@ void gba_transmit_rom() {
 
   //Sendig header
   Serial.println("Sending Header");
-  (void*)spi_rw32(0x00006102);
+  spi_rw32(0x00006102);
   uint16_t* header16 = (uint16_t*)header;
   for(int i = 0; i < 0xC0; i+=2) {
-    (void*)spi_rw32(header16[i / 2]);
+    spi_rw32(header16[i / 2]);
   }
-  (void*)spi_rw32(0x00006200);
+  spi_rw32(0x00006200);
 
   // Getting encryption and crc seeds
   Serial.println("Getting seeds.");
-  (void*)spi_rw32(0x00006202);
-  (void*)spi_rw32(0x000063D1);
+  spi_rw32(0x00006202);
+  spi_rw32(0x000063D1);
 
   token = spi_rw32(0x000063D1);
   crc_a = (token >> 16) & 0xFF;
   seed = 0xFFFF00D1 | (crc_a << 8);
   crc_a = (crc_a + 0xF) & 0xFF;
 
-  (void*)spi_rw32(0x00006400 | crc_a);
+  spi_rw32(0x00006400 | crc_a);
 
   uint32_t fsize = length + 0xF;
   fsize &= ~0xF;
@@ -131,13 +130,13 @@ void gba_transmit_rom() {
   crc_c = 0xC387;
 
   // Sending file
-  delayMicroseconds(5000);
+  delayMicroseconds(4000);
 
   Serial.write(REQUEST_FILE_CHUNK);
 
   uint32_t chunk, tmp;
   for(uint32_t fsend = 0xC0; fsend < fsize; fsend+=4) {
-    // If we have already proceeded a chunk, then we request the next part
+    // If we have already proceeded a chunk, then we can request the next part
     if(chunk_size == 32){
       Serial.write(REQUEST_FILE_CHUNK);
       chunk_size = 0;
@@ -174,12 +173,11 @@ void gba_transmit_rom() {
 
   // Final Checksum
   Serial.println("Waiting for checksum...");
-  //(void*)WriteSPI32NoDebug(0x00000065);
-  (void*)spi_rw32(0x00000065);
+  spi_rw32(0x00000065);
   spi_wait32(0x000000065, 0x00750065);
-  (void*)spi_rw32(0x00000066);
+  spi_rw32(0x00000066);
   uint32_t crc_gba = spi_rw32(crc_c & 0xFFFF) >> 16;
-  delayMicroseconds(3000);
+  delayMicroseconds(1000);
   if(crc_gba == crc_c) {
     Serial.write(TRANSMISSION_SUCCESS);
   }

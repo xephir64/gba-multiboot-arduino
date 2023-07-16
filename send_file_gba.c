@@ -9,7 +9,6 @@
 #define REQUEST_FILE_CHUNK 0x03
 #define TRANSMISSION_ERROR 0x04
 #define TRANSMISSION_SUCCESS 0x05
-#define ACK 0x06
 
 // Function to send the GBA/MB file
 int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
@@ -18,9 +17,9 @@ int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
   uint32_t bytes_read_total = 0xC0; // Total bytes read
   uint8_t ack = 0x06;
   for(;;) {
-    unsigned char buffer[512];
+    uint8_t buffer[128] = {0};
     ssize_t bytesRead = read(arduino, buffer, sizeof(buffer));
-    if(bytesRead > 0 && bytesRead < 2) {
+    if(bytesRead > 0) {
       //printf("0x%02x\n", buffer[0]);
       switch(buffer[0]) {
         case READY:
@@ -32,7 +31,6 @@ int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
           printf("Sending Header...\n");
           fread(header, sizeof(uint8_t), 0xC0, gba_file);
           for(int i = 0; i < sizeof(header); i++) {
-              // printf("Sending[%d]: %hhX\n", i, header[i]);
               serial_write(arduino, &header[i], sizeof(uint8_t));
           }
           break;
@@ -42,25 +40,18 @@ int send_gba_file(int arduino, FILE* gba_file, uint32_t length) {
             serial_write(arduino, gba_buf, bytes_read);
             bytes_read_total += bytes_read;
             printf("%d / %d\n", bytes_read_total, length);
-            usleep(1000);
           }
-          buffer[0] = '\0';
           break;
         case TRANSMISSION_ERROR:
           fprintf(stderr, "Transmission error");
           return -1;
         case TRANSMISSION_SUCCESS:
-          printf("Checksum Ok...\n");
-          //return 0;
+          printf("Multiboot done!\n");
+          return 0;
+        default:
+          printf("Message: %s\n", buffer);
+          memset(buffer, 0, sizeof(buffer));
           break;
-      }
-    }
-    else {
-      if(bytesRead > 0) {
-        printf("Message: %s\n", buffer);
-        for(int i = 0; i <= bytesRead; i++) {
-          buffer[i] = '\0';
-        }
       }
     }
   }
